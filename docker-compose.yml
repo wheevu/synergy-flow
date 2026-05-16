@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: synergyflow
+      POSTGRES_USER: synergy
+      POSTGRES_PASSWORD: synergy
+    ports: ["${POSTGRES_PORT:-55432}:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U synergy -d synergyflow"], interval: 5s, timeout: 5s, retries: 10 }
+  redis:
+    image: redis:7-alpine
+    ports: ["${REDIS_PORT:-56379}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports: ["${MINIO_API_PORT:-59000}:9000", "${MINIO_CONSOLE_PORT:-59001}:9001"]
+    volumes: ["minio:/data"]
+  create-bucket:
+    image: minio/mc:latest
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "sleep 5; mc alias set local http://minio:9000 minio minio123; mc mb -p local/synergyflow-dev || true; mc anonymous set private local/synergyflow-dev || true"
+  migrate:
+    image: golang:1.25-alpine
+    depends_on:
+      postgres: { condition: service_healthy }
+    volumes: ["./backend/migrations:/migrations"]
+    command: >
+      sh -c "go install github.com/pressly/goose/v3/cmd/goose@v3.27.1 && goose -dir /migrations postgres 'postgres://synergy:synergy@postgres:5432/synergyflow?sslmode=disable' up"
+  backend:
+    build: ./backend
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      migrate: { condition: service_completed_successfully }
+      create-bucket: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgres://synergy:synergy@postgres:5432/synergyflow?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: dev-super-secret-change-me
+      FRONTEND_URL: ${FRONTEND_PUBLIC_URL:-http://localhost:55173}
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: synergyflow-dev
+    ports: ["${BACKEND_PORT:-8080}:8080"]
+  worker:
+    build: ./backend
+    command: ["/app/worker"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgres://synergy:synergy@postgres:5432/synergyflow?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: dev-super-secret-change-me
+      FRONTEND_URL: http://localhost:5173
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: synergyflow-dev
+  frontend:
+    build: ./frontend
+    depends_on: [backend]
+    ports: ["${FRONTEND_PORT:-55173}:80"]
+volumes: { pgdata: {}, minio: {} }

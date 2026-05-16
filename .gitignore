@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+frontend/tsconfig.tsbuildinfo
+coverage/
+.tmp/
+*.png
+*.webp
+.playwright-mcp/
+out/
+backend/server
+backend/worker

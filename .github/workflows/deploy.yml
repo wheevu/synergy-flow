@@ -1,0 +1,87 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Go vet
+        run: go vet ./...
+        working-directory: backend
+
+      - name: Go test
+        run: go test ./... -v -count=1
+        working-directory: backend
+
+      - name: Go build
+        run: go build ./cmd/server ./cmd/worker
+        working-directory: backend
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+      - name: Validate Docker Compose (dev)
+        run: docker compose config
+      - name: Validate Docker Compose (prod)
+        run: docker compose -f docker-compose.prod.yml config
+
+  deploy:
+    needs: [checks]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            echo "--- Pulling latest code ---"
+            cd ~/synergy-flow
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "--- Setting up .env if missing ---"
+            if [ ! -f .env ]; then
+              echo "ERROR: .env file not found. Create it from .env.example before deploying."
+              exit 1
+            fi
+
+            echo "--- Building and starting containers ---"
+            docker compose -f docker-compose.prod.yml up -d --build
+
+            echo "--- Pruning unused images ---"
+            docker image prune -f
+
+            echo "--- Checking service status ---"
+            docker compose -f docker-compose.prod.yml ps
+
+            echo "--- Deployment complete ---"
