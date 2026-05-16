@@ -35,7 +35,9 @@
 
 ![command](asset/command-center.png)
 
-![Chatbot](asset/chatbot.png)
+<p align="center">
+       <img src="asset/chatbot.png" alt="Chatbot" width="50%" />
+</p>
 
 ## Tech stack
 
