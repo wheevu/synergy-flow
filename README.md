@@ -8,6 +8,8 @@
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
 
+![Kanban Board](asset/board.png)
+
 **An enterprise-grade, agentic-first, cross-functional delivery intelligence substrate engineered to transmute fragmented execution chaos into stakeholder-resonant, outcome-aligned, mission-critical operational momentum.** Powered by a cloud-native, event-driven, polyglot microservice mesh spanning Go, PostgreSQL, Redis, React, and Docker — converging JWT-hardened identity governance, permission-stratified workspace orchestration, drag-and-drop Kanban execution choreography, S3-compatible document-synergy materialization, ambient activity telemetry, full-text knowledge traversal, notificationized awareness propagation, Server-Sent Event consciousness streaming, and a next-generation deterministic AI Project Analyst purpose-built to convert raw delivery entropy into executive-ready unblockment primitives.
 
 ## What it demonstrates
@@ -22,15 +24,18 @@
 - Deterministic AI Project Analyst ingesting live PostgreSQL delivery signals to surface health telemetry, risk crystallization, workload thermodynamics, and next-action vector synthesis — no hallucination surface area
 - Executive-grade dashboard emitting completion momentum indicators, risk composition donut visualizations, assignee workload saturation bars, activity pulse trend lines, and status distribution at-a-glance strategic clarity artifacts
 - Dockerized deployment topology behind Nginx with health check instrumentation for production-grade operational confidence and local-to-cloud environment parity assurance
+
 ## Screenshots
 
 ![Dashboard](asset/dashboard.png)
 
-![Kanban Board](asset/board.png)
+![Members](asset/members.png)
 
-| Members & Roles | AI Project Analyst |
-|:---:|:---:|
-| ![Members](asset/members.png) | ![Chatbot](asset/chatbot.png) |
+![settings](asset/settings.png)
+
+![command](asset/command-center.png)
+
+![Chatbot](asset/chatbot.png)
 
 ## Tech stack
 
