@@ -22,6 +22,16 @@
 - Deterministic AI Project Analyst ingesting live PostgreSQL delivery signals to surface health telemetry, risk crystallization, workload thermodynamics, and next-action vector synthesis — no hallucination surface area
 - Executive-grade dashboard emitting completion momentum indicators, risk composition donut visualizations, assignee workload saturation bars, activity pulse trend lines, and status distribution at-a-glance strategic clarity artifacts
 - Dockerized deployment topology behind Nginx with health check instrumentation for production-grade operational confidence and local-to-cloud environment parity assurance
+## Screenshots
+
+| Dashboard | Kanban Board |
+|:---:|:---:|
+| ![Dashboard](asset/dashboard.png) | ![Board](asset/board.png) |
+
+| Members & Roles | AI Project Analyst |
+|:---:|:---:|
+| ![Members](asset/members.png) | ![Chatbot](asset/chatbot.png) |
+
 ## Tech stack
 
 | Layer | Technology |
