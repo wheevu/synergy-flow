@@ -8,6 +8,7 @@ coverage/
 .tmp/
 *.png
 *.webp
+!asset/*.png
 .playwright-mcp/
 out/
 backend/server
