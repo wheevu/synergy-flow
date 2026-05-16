@@ -47,7 +47,11 @@ jobs:
       - name: Validate Docker Compose (dev)
         run: docker compose config
       - name: Validate Docker Compose (prod)
-        run: docker compose -f docker-compose.prod.yml config
+        run: |
+          # docker-compose.prod.yml references env_file: .env, which doesn't
+          # exist in CI. Create a minimal placeholder for validation only.
+          echo "DATABASE_URL=postgres://u:p@host:5432/db?sslmode=disable" > .env
+          docker compose -f docker-compose.prod.yml config
 
   deploy:
     needs: [checks]
