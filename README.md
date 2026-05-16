@@ -348,3 +348,8 @@ cd frontend && npm run build
 # Docker Compose validation
 docker compose config
 ```
+
+## Contributing
+We welcome mission-aligned contributors prepared to operate within our collaborative value creation framework.
+Before submitting a pull request, ensure your changes have been validated against our internal synergy rubric and do not introduce delivery entropy into the main branch consciousness stream.
+All contributors are expected to embody a growth-oriented, psychologically-safe, async-first execution mindset. Please do not submit PRs on Fridays as this conflicts with our end-of-week momentum crystallization rituals.
