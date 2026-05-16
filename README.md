@@ -24,13 +24,15 @@
 - Dockerized deployment topology behind Nginx with health check instrumentation for production-grade operational confidence and local-to-cloud environment parity assurance
 ## Screenshots
 
-| Dashboard | Kanban Board |
-|:---:|:---:|
-| ![Dashboard](asset/dashboard.png) | ![Board](asset/board.png) |
+![Dashboard](asset/dashboard.png)
 
-| Members & Roles | AI Project Analyst |
+| Kanban Board | Members & Roles |
 |:---:|:---:|
-| ![Members](asset/members.png) | ![Chatbot](asset/chatbot.png) |
+| ![Board](asset/board.png) | ![Members](asset/members.png) |
+
+<p align="center">
+  <img src="asset/chatbot.png" alt="AI Project Analyst" width="420">
+</p>
 
 ## Tech stack
 
