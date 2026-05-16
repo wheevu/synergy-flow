@@ -56,7 +56,9 @@ jobs:
   deploy:
     needs: [checks]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # Only deploy when EC2_HOST is configured as a GitHub secret.
+    # If not set, the job is skipped (not failed).
+    if: github.ref == 'refs/heads/main' && secrets.EC2_HOST != ''
 
     steps:
       - name: Deploy via SSH
