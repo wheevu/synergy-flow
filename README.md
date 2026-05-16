@@ -26,13 +26,11 @@
 
 ![Dashboard](asset/dashboard.png)
 
-| Kanban Board | Members & Roles |
-|:---:|:---:|
-| ![Board](asset/board.png) | ![Members](asset/members.png) |
+![Kanban Board](asset/board.png)
 
-<p align="center">
-  <img src="asset/chatbot.png" alt="AI Project Analyst" width="420">
-</p>
+| Members & Roles | AI Project Analyst |
+|:---:|:---:|
+| ![Members](asset/members.png) | ![Chatbot](asset/chatbot.png) |
 
 ## Tech stack
 
