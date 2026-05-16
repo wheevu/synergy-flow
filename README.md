@@ -1,42 +1,27 @@
 # SynergyFlow
 
-**Real-time collaborative project management platform.** Built with Go, PostgreSQL,
-Redis, React, and Docker. JWT authentication, role-based workspaces, drag-and-drop
-Kanban boards, S3-compatible file uploads, activity logs, full-text search,
-notifications, live SSE updates, and a deterministic AI Project Analyst.
+![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-FF4438?style=flat&logo=redis&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
 
-> *"Okay, this is funny, but the engineering is real."*
-
----
-
-## Screenshots
-
-| Dashboard | Kanban Board | AI Analyst |
-|-----------|-------------|------------|
-| `screenshots/dashboard.png` | `screenshots/board.png` | `screenshots/ai-analyst.png` |
-| Task Drawer | Members | Notifications |
-| `screenshots/task-drawer.png` | `screenshots/members.png` | `screenshots/notifications.png` |
-
-*(Add screenshots to the `screenshots/` directory to populate the table.)*
-
----
+**An enterprise-grade, agentic-first, cross-functional delivery intelligence substrate engineered to transmute fragmented execution chaos into stakeholder-resonant, outcome-aligned, mission-critical operational momentum.** Powered by a cloud-native, event-driven, polyglot microservice mesh spanning Go, PostgreSQL, Redis, React, and Docker — converging JWT-hardened identity governance, permission-stratified workspace orchestration, drag-and-drop Kanban execution choreography, S3-compatible document-synergy materialization, ambient activity telemetry, full-text knowledge traversal, notificationized awareness propagation, Server-Sent Event consciousness streaming, and a next-generation deterministic AI Project Analyst purpose-built to convert raw delivery entropy into executive-ready unblockment primitives.
 
 ## What it demonstrates
 
-- Full-stack SaaS architecture with a Go API and React/TypeScript frontend
-- JWT access tokens, refresh token rotation, bcrypt password hashing, session revocation
-- Role-based workspace permissions: Owner, Admin, Member, Viewer
-- PostgreSQL schema design with indexes, full-text search (`tsvector`), JSONB activity
-  metadata, and transactional Kanban task movement
-- Redis-backed Server-Sent Events fanout for real-time board updates
-- AWS S3-compatible attachment storage with presigned URLs, local MinIO development
-- Queued email jobs for Resend with a dedicated worker process
-- Deterministic AI Project Analyst that computes health signals, risk detection,
-  workload analysis, and suggested actions from live PostgreSQL data
-- Dashboard with completion metrics, risk composition donuts, workload bars,
-  activity pulse line charts, and status distribution
-- Dockerized local and production deployment behind Nginx with health checks
-
+- Holistic full-stack SaaS delivery architecture leveraging a Go-powered API substrate and a React/TypeScript experience layer for frictionless human-computer alignment rituals
+- JWT-anchored identity continuity with refresh token rotation hygiene, bcrypt-hardened credential encapsulation, and session revocation primitives for zero-trust boundary enforcement
+- Responsibility-stratified workspace permission choreography across Owner, Admin, Member, and Viewer accountability planes
+- PostgreSQL schema topology engineered for indexed full-text knowledge retrieval (`tsvector`), JSONB-native activity metadata fluidity, and transactional Kanban task reflow with dense positional integrity guarantees
+- Redis-backed Server-Sent Event fanout mesh for sub-second collaborative awareness propagation across distributed client consciousness nodes
+- AWS S3-compatible attachment persistence with presigned URL delivery vectors and MinIO-powered local fidelity simulation for development-stage synergy velocity
+- Asynchronous email job pipeline via Resend, hydrated by a dedicated worker process for non-blocking stakeholder communication throughput
+- Deterministic AI Project Analyst ingesting live PostgreSQL delivery signals to surface health telemetry, risk crystallization, workload thermodynamics, and next-action vector synthesis — no hallucination surface area
+- Executive-grade dashboard emitting completion momentum indicators, risk composition donut visualizations, assignee workload saturation bars, activity pulse trend lines, and status distribution at-a-glance strategic clarity artifacts
+- Dockerized deployment topology behind Nginx with health check instrumentation for production-grade operational confidence and local-to-cloud environment parity assurance
 ## Tech stack
 
 | Layer | Technology |
@@ -72,8 +57,7 @@ Non-default host ports avoid conflicts with services already running:
 | MinIO API | `localhost:59000` |
 | MinIO Console | `localhost:59001` |
 
-Override with `POSTGRES_PORT`, `REDIS_PORT`, `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`,
-`BACKEND_PORT`, `FRONTEND_PUBLIC_URL`, or `FRONTEND_PORT` in `.env`.
+Override with `POSTGRES_PORT`, `REDIS_PORT`, `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`, `BACKEND_PORT`, `FRONTEND_PUBLIC_URL`, or `FRONTEND_PORT` in `.env`.
 
 ### Demo account
 
@@ -104,10 +88,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture guide
 
 ### Dashboard
 
-The dashboard provides a project health overview with:
-
 - **5 KPI cards**: Total tasks, completed, overdue, urgent/high priority, unassigned
-- **Completion card**: Percentage bar + health badge (Critical/Watch/Healthy/Active)
+- **Completion card**: Percentage bar + health badge (Critical / Watch / Healthy / Active)
 - **Workload chart**: Horizontal bars per assignee (open / total / risk)
 - **Risk queue**: Top 5 riskiest tasks with priority, reason, and due date
 - **Status distribution**: Donut chart of tasks per column
@@ -119,15 +101,15 @@ The dashboard provides a project health overview with:
 
 - Five-column board: Backlog → Todo → In Progress → In Review → Done
 - Drag-and-drop with transactional dense ordering
-- Task cards show priority, assignee avatars, due date, labels, overdue status
-- Search, filter by priority/label/assignee/due date
+- Task cards show priority, assignee avatars, due date, labels, and overdue status
+- Search and filter by priority, label, assignee, and due date
 - Bulk selection with batch status/assignee/priority/label changes
 - Real-time SSE updates from other sessions
 - Inline task creation per column
 
 ### Task Drawer
 
-- Edit title, description, priority, assignee, due date, labels
+- Edit title, description, priority, assignee, due date, and labels
 - Draft detection — unsaved changes prompt on close
 - Comment thread with author and timestamp
 - File attachments with upload/download/delete
@@ -156,10 +138,8 @@ The dashboard provides a project health overview with:
 - Deterministic analysis from live PostgreSQL data — no external LLM calls
 - Prompt chips: project health, blockers, next actions, workload review
 - Returns structured signals (label + value + severity) and suggested actions
-- Analyzes: overdue tasks, urgent priority, blocked labels, stale tasks, unassigned
-  work, overloaded assignees, completion rate, recent activity
-- Prompt categories: next actions, risks, overload, summary, overdue/urgent,
-  recent changes, project health, blockers
+- Analyzes: overdue tasks, urgent priority, blocked labels, stale tasks, unassigned work, overloaded assignees, completion rate, recent activity
+- Prompt categories: next actions, risks, overload, summary, overdue/urgent, recent changes, project health, blockers
 
 ### Activity Feed
 
@@ -170,7 +150,7 @@ The dashboard provides a project health overview with:
 
 ## API overview
 
-See [API reference in README](#api-overview) and the full route map in `app.go`.
+See the full route map in `app.go`.
 
 ### Authentication
 
@@ -217,7 +197,9 @@ See [API reference in README](#api-overview) and the full route map in `app.go`.
 | GET | `/api/notifications` | User notifications |
 | POST | `/api/notifications/read` | Mark all as read |
 
-## Real-time Architecture (SSE)
+---
+
+## Real-time architecture (SSE)
 
 1. Backend actions publish events to Redis channels (`project:{projectId}`)
 2. Clients connect to `GET /projects/:id/events` — returns an SSE stream
@@ -226,7 +208,8 @@ See [API reference in README](#api-overview) and the full route map in `app.go`.
 5. Nginx is configured with `proxy_buffering off` for streaming
 6. Client-side reconnection with live/reconnecting state indicator
 
-## Task Movement
+
+## Task movement
 
 Drag-and-drop uses a database transaction:
 
@@ -238,7 +221,7 @@ Drag-and-drop uses a database transaction:
 
 Maintains dense integer ordering. Cross-project moves are rejected.
 
-## Auth & Sessions
+## Auth & sessions
 
 - Access tokens: 15-minute TTL, signed with HS256
 - Refresh tokens: 30-day TTL, stored as SHA-256 hash in `sessions` table
@@ -247,7 +230,8 @@ Maintains dense integer ordering. Cross-project moves are rejected.
 - Passwords: bcrypt with cost factor 12
 - Auth errors return generic messages (no account existence leakage)
 
-## Permission Matrix
+
+## Permission matrix
 
 | Action | Viewer | Member | Admin | Owner |
 |--------|--------|--------|-------|-------|
@@ -261,8 +245,9 @@ Maintains dense integer ordering. Cross-project moves are rejected.
 | Manage invites | | | ✓ | ✓ |
 | Change member roles | | | ✓ | ✓ |
 | Remove members (non-Owner) | | | ✓ | ✓ |
-| Edit/delete projects | | | ✓ | ✓ (Owner) |
+| Edit/delete projects | | | ✓ | ✓ |
 | Delete workspace | | | | ✓ |
+
 
 ## AI Project Analyst
 
@@ -274,10 +259,9 @@ The analyst performs **deterministic** project health analysis — no external L
 4. Matches prompt keywords to answer templates
 5. Returns structured `signals[]`, `suggestedActions[]`, and `answer` string
 
-Prompt categories: next actions, risk detection, overload analysis, sprint summary,
-overdue/urgent list, recent changes, project health, blocker detection.
+Prompt categories: next actions, risk detection, overload analysis, sprint summary, overdue/urgent list, recent changes, project health, blocker detection.
 
-## Role-based Security
+## Security
 
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
@@ -290,12 +274,12 @@ overdue/urgent list, recent changes, project health, blocker detection.
 
 See [docs/SECURITY.md](docs/SECURITY.md) for the full security review.
 
+
 ## Production deployment
 
-See the full guide in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — or use the
-deployment outline below:
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full guide.
 
-### Quick production start
+### Quick start
 
 ```bash
 cp .env.example .env
@@ -347,23 +331,3 @@ cd frontend && npm run build
 # Docker Compose validation
 docker compose config
 ```
-
-## Resume bullets
-
-- Built a real-time project management platform with Go, PostgreSQL, Redis,
-  React, Docker, and AWS
-- Implemented JWT authentication, refresh token rotation, role-based workspace
-  permissions, and session revocation
-- Designed PostgreSQL schemas with indexed full-text search, JSONB activity
-  metadata, and transactional Kanban task movement with dense integer ordering
-- Built a Redis-backed SSE fanout for real-time board synchronization across
-  multiple clients
-- Deployed a Dockerized full-stack application behind Nginx with CI/CD through
-  GitHub Actions, including automated migration and seed data
-- Shipped an AI Project Analyst feature with a polished React UI and a Go API
-  endpoint that computes deterministic health signals, risk detection, workload
-  analysis, and suggested next actions from live board data
-- Developed a responsive dashboard with SVG-based donut, line, and bar charts
-  for project health, workload distribution, risk composition, and activity trends
-- Implemented S3-compatible file uploads with presigned URLs and configurable
-  size limits, supporting both MinIO (local) and AWS S3 (production)
