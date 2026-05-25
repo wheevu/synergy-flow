@@ -5,7 +5,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /out/server ./cmd/server && CGO_ENABLED=0 go build -o /out/worker ./cmd/worker
 FROM alpine:3.20
-RUN adduser -D appuser
+RUN adduser -D appuser && mkdir -p /var/lib/synergyflow/eventlog && chown -R appuser:appuser /var/lib/synergyflow
 WORKDIR /app
 COPY --from=build /out/server /app/server
 COPY --from=build /out/worker /app/worker

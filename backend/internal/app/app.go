@@ -26,17 +26,23 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/example/synergyflow/backend/internal/eventlog"
 	"github.com/example/synergyflow/backend/internal/middleware"
 )
 
-type Config struct{ DatabaseURL, RedisURL, JWTSecret, FrontendURL, S3Bucket, S3Region, S3Endpoint, S3AccessKey, S3SecretKey, ResendAPIKey, FromEmail string }
+type Config struct {
+	DatabaseURL, RedisURL, JWTSecret, FrontendURL, S3Bucket, S3Region, S3Endpoint, S3AccessKey, S3SecretKey, ResendAPIKey, FromEmail string
+	EventLogRoot                                                                                                                     string
+	EventLogFsync                                                                                                                    bool
+}
 type Server struct {
-	cfg     Config
-	db      *pgxpool.Pool
-	redis   *redis.Client
-	s3      *s3.Client
-	presign *s3.PresignClient
-	router  *gin.Engine
+	cfg      Config
+	db       *pgxpool.Pool
+	redis    *redis.Client
+	s3       *s3.Client
+	presign  *s3.PresignClient
+	eventLog *eventlog.Log
+	router   *gin.Engine
 }
 type User struct{ ID, Name, Email string }
 type Claims struct {
@@ -49,11 +55,16 @@ type Event struct {
 	ActorID   string `json:"actorId,omitempty"`
 	Data      any    `json:"data"`
 }
+type durableEvent struct {
+	ID      uint64          `json:"id"`
+	Payload json.RawMessage `json:"payload"`
+}
 
 func LoadConfig() Config {
 	cfg := Config{
 		DatabaseURL: env("DATABASE_URL", "postgres://synergy:synergy@localhost:5432/synergyflow?sslmode=disable"), RedisURL: env("REDIS_URL", "redis://localhost:6379/0"), JWTSecret: env("JWT_SECRET", "dev-only-change-me"), FrontendURL: env("FRONTEND_URL", "http://localhost:5173"),
 		S3Bucket: env("S3_BUCKET", "synergyflow-dev"), S3Region: env("AWS_REGION", "us-east-1"), S3Endpoint: os.Getenv("S3_ENDPOINT"), S3AccessKey: os.Getenv("AWS_ACCESS_KEY_ID"), S3SecretKey: os.Getenv("AWS_SECRET_ACCESS_KEY"), ResendAPIKey: os.Getenv("RESEND_API_KEY"), FromEmail: env("FROM_EMAIL", "SynergyFlow <noreply@example.com>"),
+		EventLogRoot: env("EVENTLOG_ROOT", "./data/eventlog"), EventLogFsync: strings.EqualFold(env("EVENTLOG_FSYNC", "false"), "true"),
 	}
 	if cfg.JWTSecret == "dev-only-change-me" || cfg.JWTSecret == "" {
 		log.Println("[WARN] JWT_SECRET is using the default dev value. Generate a strong secret with: openssl rand -base64 32")
@@ -88,7 +99,11 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 			o.UsePathStyle = true
 		}
 	})
-	s := &Server{cfg: cfg, db: db, redis: rdb, s3: s3c, presign: s3.NewPresignClient(s3c)}
+	elog, err := eventlog.Open(cfg.EventLogRoot, cfg.EventLogFsync)
+	if err != nil {
+		return nil, err
+	}
+	s := &Server{cfg: cfg, db: db, redis: rdb, s3: s3c, presign: s3.NewPresignClient(s3c), eventLog: elog}
 	s.routes()
 	return s, nil
 }
@@ -770,21 +785,40 @@ func (s *Server) events(c *gin.Context) {
 	if !s.canProject(c, pid, "Viewer") {
 		return
 	}
-	channel := "project:" + pid
-	sub := s.redis.Subscribe(c, channel)
-	defer sub.Close()
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Accel-Buffering", "no")
+	after := eventAfter(c)
+	if s.eventLog != nil {
+		records, err := s.eventLog.ReadAfter(pid, after, 100)
+		if err != nil {
+			fail(c, 500, err)
+			return
+		}
+		for _, rec := range records {
+			writeSSE(c.Writer, rec.ID, "message", rec.Payload)
+			after = rec.ID
+		}
+		c.Writer.Flush()
+	}
+	channel := "project:" + pid
+	sub := s.redis.Subscribe(c, channel)
+	defer sub.Close()
 	c.Stream(func(w io.Writer) bool {
 		select {
 		case <-c.Request.Context().Done():
 			return false
 		case msg := <-sub.Channel():
-			c.SSEvent("message", msg.Payload)
+			var ev durableEvent
+			if err := json.Unmarshal([]byte(msg.Payload), &ev); err == nil && ev.ID > after && len(ev.Payload) > 0 {
+				writeSSE(c.Writer, ev.ID, "message", ev.Payload)
+				after = ev.ID
+			} else {
+				c.SSEvent("message", msg.Payload)
+			}
 			return true
 		case <-time.After(25 * time.Second):
-			c.SSEvent("ping", gin.H{"ts": time.Now()})
+			writeSSE(c.Writer, 0, "ping", []byte(fmt.Sprintf(`{"ts":%q}`, time.Now().Format(time.RFC3339))))
 			return true
 		}
 	})
@@ -796,6 +830,34 @@ func (s *Server) workspaceActivity(c *gin.Context) {
 	rows, err := s.db.Query(c, "select id,event_type,metadata,created_at from activity_events where workspace_id=$1 order by created_at desc limit 50", c.Param("id"))
 	scanRows(c, rows, err)
 }
+
+func eventAfter(c *gin.Context) uint64 {
+	if v := strings.TrimSpace(c.Query("after")); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			return n
+		}
+	}
+	if v := strings.TrimSpace(c.GetHeader("Last-Event-ID")); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+func writeSSE(w io.Writer, id uint64, event string, data []byte) {
+	if id > 0 {
+		fmt.Fprintf(w, "id: %d\n", id)
+	}
+	if event != "" {
+		fmt.Fprintf(w, "event: %s\n", event)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fmt.Fprintf(w, "data: %s\n", line)
+	}
+	fmt.Fprint(w, "\n")
+}
+
 func (s *Server) dashboard(c *gin.Context) {
 	if !s.can(c, c.Param("id"), "Viewer") {
 		return
@@ -819,7 +881,9 @@ func (s *Server) aiAnalyze(c *gin.Context) {
 	if !s.canProject(c, pid, "Viewer") {
 		return
 	}
-	var in struct{ Prompt string `json:"prompt"` }
+	var in struct {
+		Prompt string `json:"prompt"`
+	}
 	if bind(c, &in) {
 		return
 	}
@@ -831,7 +895,7 @@ func (s *Server) aiAnalyze(c *gin.Context) {
 	// Fetch tasks with column names for the project
 	type aiTask struct {
 		ID, Title, Description, Priority, Status string
-		AssigneeID, DueDate, Labels               *string
+		AssigneeID, DueDate, Labels              *string
 		UpdatedAt                                time.Time
 	}
 	var tasks []aiTask
@@ -1232,12 +1296,12 @@ func summarizeEvents(events []string) string {
 	for _, label := range []string{"task.created", "task.updated", "task.moved", "comment.created", "attachment.created", "member.joined"} {
 		if c := counts[label]; c > 0 {
 			verb := map[string]string{
-				"task.created":    "created",
-				"task.updated":    "updated",
-				"task.moved":      "moved",
-				"comment.created": "commented",
+				"task.created":       "created",
+				"task.updated":       "updated",
+				"task.moved":         "moved",
+				"comment.created":    "commented",
 				"attachment.created": "uploaded attachments",
-				"member.joined":   "new members joined",
+				"member.joined":      "new members joined",
 			}[label]
 			if c == 1 {
 				parts = append(parts, fmt.Sprintf("1 task %s", verb))
@@ -1319,7 +1383,16 @@ func (s *Server) projectEvent(ctx context.Context, pid, typ string, data any) {
 	_ = s.db.QueryRow(ctx, "select workspace_id from projects where id=$1", pid).Scan(&wid)
 	s.activity(ctx, wid, &pid, typ, data)
 	b, _ := json.Marshal(Event{Type: typ, ProjectID: pid, ActorID: actor(ctx), Data: data})
-	s.redis.Publish(ctx, "project:"+pid, string(b))
+	var id uint64
+	if s.eventLog != nil {
+		if appended, err := s.eventLog.Append(pid, b); err == nil {
+			id = appended
+		} else {
+			log.Printf("eventlog append project=%s type=%s: %v", pid, typ, err)
+		}
+	}
+	pub, _ := json.Marshal(durableEvent{ID: id, Payload: b})
+	s.redis.Publish(ctx, "project:"+pid, string(pub))
 }
 func (s *Server) activity(ctx context.Context, wid string, pid *string, typ string, data any) {
 	b, _ := json.Marshal(data)

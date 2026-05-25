@@ -24,6 +24,10 @@
 - Deterministic AI Project Analyst ingesting live PostgreSQL delivery signals to surface health telemetry, risk crystallization, workload thermodynamics, and next-action vector synthesis — no hallucination surface area
 - Executive-grade dashboard emitting completion momentum indicators, risk composition donut visualizations, assignee workload saturation bars, activity pulse trend lines, and status distribution at-a-glance strategic clarity artifacts
 - Dockerized deployment topology behind Nginx with health check instrumentation for production-grade operational confidence and local-to-cloud environment parity assurance
+- Append-only binary event log with per-project segment files, monotonic event IDs,
+CRC32 integrity validation, corrupt-tail truncation on startup, and replay-by-offset
+— enabling durable SSE reconnect recovery and Last-Event-ID resumption across
+ephemeral Redis delivery gaps.
 
 ## Screenshots
 

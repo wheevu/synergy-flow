@@ -53,6 +53,9 @@ services:
       AWS_SECRET_ACCESS_KEY: minio123
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: synergyflow-dev
+      EVENTLOG_ROOT: /var/lib/synergyflow/eventlog
+      EVENTLOG_FSYNC: "false"
+    volumes: ["eventlog:/var/lib/synergyflow/eventlog"]
     ports: ["${BACKEND_PORT:-8080}:8080"]
   worker:
     build: ./backend
@@ -71,8 +74,9 @@ services:
       AWS_SECRET_ACCESS_KEY: minio123
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: synergyflow-dev
+      EVENTLOG_ROOT: /var/lib/synergyflow/eventlog
   frontend:
     build: ./frontend
     depends_on: [backend]
     ports: ["${FRONTEND_PORT:-55173}:80"]
-volumes: { pgdata: {}, minio: {} }
+volumes: { pgdata: {}, minio: {}, eventlog: {} }

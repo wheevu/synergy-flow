@@ -1,8 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestRank(t *testing.T) {
@@ -197,5 +201,35 @@ func TestUuidFromBytes(t *testing.T) {
 				t.Errorf("uuidFromBytes() = %q, expected '-' at position %d", got, i)
 			}
 		}
+	}
+}
+
+func TestWriteSSEIncludesReplayID(t *testing.T) {
+	var b bytes.Buffer
+	writeSSE(&b, 42, "message", []byte(`{"type":"task.updated"}`))
+	got := b.String()
+	for _, want := range []string{"id: 42\n", "event: message\n", `data: {"type":"task.updated"}`, "\n\n"} {
+		if !contains(got, want) {
+			t.Fatalf("SSE frame missing %q: %q", want, got)
+		}
+	}
+}
+
+func TestEventAfterPrefersQueryThenHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/events?after=9", nil)
+	c.Request.Header.Set("Last-Event-ID", "3")
+	if got := eventAfter(c); got != 9 {
+		t.Fatalf("eventAfter query = %d, want 9", got)
+	}
+
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/events", nil)
+	c.Request.Header.Set("Last-Event-ID", "3")
+	if got := eventAfter(c); got != 3 {
+		t.Fatalf("eventAfter header = %d, want 3", got)
 	}
 }
