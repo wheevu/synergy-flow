@@ -20,13 +20,13 @@
 - PostgreSQL schema topology engineered for indexed full-text knowledge retrieval (`tsvector`), JSONB-native activity metadata fluidity, and transactional Kanban task reflow with dense positional integrity guarantees
 - Redis-backed Server-Sent Event fanout mesh for sub-second collaborative awareness propagation across distributed client consciousness nodes
 - AWS S3-compatible attachment persistence with presigned URL delivery vectors and MinIO-powered local fidelity simulation for development-stage synergy velocity
-- Asynchronous email job pipeline via Resend, hydrated by a dedicated worker process for non-blocking stakeholder communication throughput
+- Asynchronous email job queue with a worker process; current delivery is stdout logging unless a sender is implemented
 - Deterministic AI Project Analyst ingesting live PostgreSQL delivery signals to surface health telemetry, risk crystallization, workload thermodynamics, and next-action vector synthesis — no hallucination surface area
 - Executive-grade dashboard emitting completion momentum indicators, risk composition donut visualizations, assignee workload saturation bars, activity pulse trend lines, and status distribution at-a-glance strategic clarity artifacts
 - Dockerized deployment topology behind Nginx with health check instrumentation for production-grade operational confidence and local-to-cloud environment parity assurance
 - Append-only binary event log with per-project segment files, monotonic event IDs,
-CRC32 integrity validation, corrupt-tail truncation on startup, and replay-by-offset
-— enabling durable SSE reconnect recovery and Last-Event-ID resumption across
+CRC32 integrity validation, corrupt-tail truncation on startup, and replay after
+monotonic event ID — enabling durable SSE reconnect recovery and Last-Event-ID resumption across
 ephemeral Redis delivery gaps.
 
 ## Screenshots
@@ -265,7 +265,7 @@ Maintains dense integer ordering. Cross-project moves are rejected.
 | Create projects | | ✓ | ✓ | ✓ |
 | Manage invites | | | ✓ | ✓ |
 | Change member roles | | | ✓ | ✓ |
-| Remove members (non-Owner) | | | ✓ | ✓ |
+| Remove lower-ranked members | | | ✓ | ✓ |
 | Edit/delete projects | | | ✓ | ✓ |
 | Delete workspace | | | | ✓ |
 
@@ -317,7 +317,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 | `FRONTEND_URL` | Public frontend URL (CORS + invite links) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 storage credentials |
 | `S3_BUCKET` | S3 bucket for file attachments |
-| `RESEND_API_KEY` | Transactional email (optional) |
+| `EVENTLOG_ROOT` | Durable SSE event-log path (prod compose persists `/var/lib/synergyflow/eventlog`) |
 
 ### Demo script
 
@@ -325,7 +325,7 @@ Walk through the full app in 5 minutes: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.m
 
 ## Known limitations
 
-- Invite email flow requires Resend API key (invite links still work in UI)
+- Email jobs are queued and logged by the worker; external email delivery is not implemented yet (invite links still work in UI/API responses)
 - File attachments require S3-compatible storage (MinIO included for dev)
 - SSE requires Nginx with `proxy_buffering off` (already configured)
 - Frontend expects same-origin API by default (`VITE_API_URL` empty)

@@ -68,7 +68,7 @@ Each endpoint checks the minimum required role before processing:
 3. Set `FRONTEND_URL` to the exact frontend domain
 4. Use strong database credentials
 5. Restrict S3 bucket access with IAM policies
-6. Keep Resend API key secure
+6. If adding an email provider, keep its API key in secrets and out of logs
 7. Use Docker non-root user (already configured)
 8. Enable Postgres SSL in production (`sslmode=require`)
 9. Set secure session and JWT TTLs

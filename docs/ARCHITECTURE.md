@@ -147,7 +147,7 @@ PostgreSQL 16 with pgx/v5 connection pooling:
 The worker process runs in a separate container and:
 
 1. Polls `email_jobs` table every 10 seconds
-2. Sends emails via Resend (if configured) or logs to stdout
+2. Logs queued email jobs to stdout (the `RESEND_API_KEY` config is reserved; no Resend API call is currently implemented)
 3. Retries failed jobs up to 5 times
 4. Runs as a separate binary (`cmd/worker/main.go`)
 

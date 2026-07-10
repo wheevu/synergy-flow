@@ -28,10 +28,14 @@ services:
   backend:
     build: ./backend
     env_file: .env
+    environment:
+      EVENTLOG_ROOT: /var/lib/synergyflow/eventlog
+      EVENTLOG_FSYNC: ${EVENTLOG_FSYNC:-false}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
+    volumes: ["eventlog:/var/lib/synergyflow/eventlog"]
     expose: ["8080"]
   worker:
     build: ./backend
@@ -50,4 +54,4 @@ services:
     ports: ["80:80", "443:443"]
     volumes:
       - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-volumes: { pgdata: {}, redisdata: {} }
+volumes: { pgdata: {}, redisdata: {}, eventlog: {} }

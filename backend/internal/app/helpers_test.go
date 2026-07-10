@@ -27,6 +27,48 @@ func TestRank(t *testing.T) {
 	}
 }
 
+func TestCanModifyRoleRequiresStrictlyHigherRank(t *testing.T) {
+	tests := []struct {
+		name, actor, target string
+		want                bool
+	}{
+		{"admin can modify member", "Admin", "Member", true},
+		{"admin cannot modify admin", "Admin", "Admin", false},
+		{"admin cannot modify owner", "Admin", "Owner", false},
+		{"owner can modify admin", "Owner", "Admin", true},
+		{"owner cannot modify owner", "Owner", "Owner", false},
+		{"strict rank helper allows any higher rank", "Member", "Viewer", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := canModifyRole(tt.actor, tt.target); got != tt.want {
+				t.Fatalf("canModifyRole(%q,%q) = %v, want %v", tt.actor, tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCanAssignRoleRequiresStrictlyHigherRank(t *testing.T) {
+	tests := []struct {
+		name, actor, assigned string
+		want                  bool
+	}{
+		{"admin can invite member", "Admin", "Member", true},
+		{"admin cannot invite admin", "Admin", "Admin", false},
+		{"admin cannot invite owner", "Admin", "Owner", false},
+		{"owner can invite admin", "Owner", "Admin", true},
+		{"owner cannot invite owner", "Owner", "Owner", false},
+		{"unknown role rejected", "Owner", "Unknown", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := canAssignRole(tt.actor, tt.assigned); got != tt.want {
+				t.Fatalf("canAssignRole(%q,%q) = %v, want %v", tt.actor, tt.assigned, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	tests := []struct {
 		input string

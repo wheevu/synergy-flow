@@ -14,6 +14,17 @@ func rank(r string) int {
 	return map[string]int{"Viewer": 1, "Member": 2, "Admin": 3, "Owner": 4}[r]
 }
 
+// canModifyRole returns true only when actor outranks the target user.
+// This prevents Admins from changing/removing other Admins or Owners, and
+// also prevents Owners from modifying peer Owners.
+func canModifyRole(actorRole, targetRole string) bool {
+	return rank(actorRole) > rank(targetRole)
+}
+
+func canAssignRole(actorRole, assignedRole string) bool {
+	return rank(assignedRole) > 0 && rank(actorRole) > rank(assignedRole)
+}
+
 // slugify transforms a string into a URL-safe slug (lowercase alphanumeric + hyphens).
 func slugify(s string) string {
 	return strings.Trim(strings.Map(func(r rune) rune {

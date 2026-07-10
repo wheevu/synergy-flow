@@ -225,14 +225,31 @@ func (s *Server) refresh(c *gin.Context) {
 		return
 	}
 	h := hashToken(in.RefreshToken)
+	tx, err := s.db.Begin(c)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
+	defer tx.Rollback(c)
 	var sid, uid string
-	err := s.db.QueryRow(c, "select id,user_id from sessions where refresh_token_hash=$1 and revoked_at is null and expires_at>now()", h).Scan(&sid, &uid)
+	err = tx.QueryRow(c, "select id,user_id from sessions where refresh_token_hash=$1 and revoked_at is null and expires_at>now() for update", h).Scan(&sid, &uid)
 	if err != nil {
 		c.JSON(401, gin.H{"error": "invalid refresh token"})
 		return
 	}
-	s.db.Exec(c, "update sessions set revoked_at=now() where id=$1", sid)
-	toks, _ := s.issueTokens(c, uid)
+	if _, err = tx.Exec(c, "update sessions set revoked_at=now() where id=$1 and revoked_at is null", sid); err != nil {
+		fail(c, 500, err)
+		return
+	}
+	toks, err := s.issueTokensTx(c, tx, uid)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
+	if err = tx.Commit(c); err != nil {
+		fail(c, 500, err)
+		return
+	}
 	c.JSON(200, gin.H{"tokens": toks})
 }
 func (s *Server) logout(c *gin.Context) {
@@ -298,16 +315,44 @@ func (s *Server) listMembers(c *gin.Context) {
 
 func (s *Server) removeMember(c *gin.Context) {
 	wid := c.Param("id")
-	if !s.can(c, wid, "Admin") {
-		return
-	}
 	if c.Param("uid") == userID(c) {
 		c.JSON(400, gin.H{"error": "cannot remove yourself"})
 		return
 	}
-	_, err := s.db.Exec(c, "delete from workspace_members where workspace_id=$1 and user_id=$2 and role<>'Owner'", wid, c.Param("uid"))
+	tx, err := s.db.Begin(c)
 	if err != nil {
-		fail(c, 400, err)
+		fail(c, 500, err)
+		return
+	}
+	defer tx.Rollback(c)
+	actorRole, targetRole, ok := s.lockMemberPair(c, tx, wid, userID(c), c.Param("uid"), "Admin")
+	if !ok {
+		return
+	}
+	if !canModifyRole(actorRole, targetRole) {
+		c.JSON(403, gin.H{"error": "cannot modify equal or higher role"})
+		return
+	}
+	var assigned bool
+	if err = tx.QueryRow(c, "select exists(select 1 from tasks t join projects p on p.id=t.project_id where p.workspace_id=$1 and t.assignee_id=$2)", wid, c.Param("uid")).Scan(&assigned); err != nil {
+		fail(c, 500, err)
+		return
+	}
+	if assigned {
+		c.JSON(409, gin.H{"error": "reassign or unassign this member's tasks before removing them"})
+		return
+	}
+	tag, err := tx.Exec(c, "delete from workspace_members where workspace_id=$1 and user_id=$2", wid, c.Param("uid"))
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		c.JSON(404, gin.H{"error": "member not found"})
+		return
+	}
+	if err = tx.Commit(c); err != nil {
+		fail(c, 500, err)
 		return
 	}
 	c.JSON(200, gin.H{"ok": true})
@@ -315,9 +360,6 @@ func (s *Server) removeMember(c *gin.Context) {
 
 func (s *Server) updateMemberRole(c *gin.Context) {
 	wid := c.Param("id")
-	if !s.can(c, wid, "Admin") {
-		return
-	}
 	var in struct{ Role string }
 	if bind(c, &in) {
 		return
@@ -326,9 +368,31 @@ func (s *Server) updateMemberRole(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "invalid role"})
 		return
 	}
-	_, err := s.db.Exec(c, "update workspace_members set role=$3 where workspace_id=$1 and user_id=$2 and role<>'Owner'", wid, c.Param("uid"), in.Role)
+	tx, err := s.db.Begin(c)
 	if err != nil {
-		fail(c, 400, err)
+		fail(c, 500, err)
+		return
+	}
+	defer tx.Rollback(c)
+	actorRole, targetRole, ok := s.lockMemberPair(c, tx, wid, userID(c), c.Param("uid"), "Admin")
+	if !ok {
+		return
+	}
+	if !canModifyRole(actorRole, targetRole) || !canModifyRole(actorRole, in.Role) {
+		c.JSON(403, gin.H{"error": "cannot modify equal or higher role"})
+		return
+	}
+	tag, err := tx.Exec(c, "update workspace_members set role=$3 where workspace_id=$1 and user_id=$2", wid, c.Param("uid"), in.Role)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		c.JSON(404, gin.H{"error": "member not found"})
+		return
+	}
+	if err = tx.Commit(c); err != nil {
+		fail(c, 500, err)
 		return
 	}
 	c.JSON(200, gin.H{"ok": true})
@@ -345,7 +409,8 @@ func (s *Server) listInvites(c *gin.Context) {
 
 func (s *Server) createInvite(c *gin.Context) {
 	wid := c.Param("id")
-	if !s.can(c, wid, "Admin") {
+	actorRole, ok := s.role(c, wid, "Admin")
+	if !ok {
 		return
 	}
 	var in struct{ Email, Role string }
@@ -354,6 +419,14 @@ func (s *Server) createInvite(c *gin.Context) {
 	}
 	if in.Role == "" {
 		in.Role = "Member"
+	}
+	if in.Role != "Viewer" && in.Role != "Member" && in.Role != "Admin" {
+		c.JSON(400, gin.H{"error": "invalid role"})
+		return
+	}
+	if !canAssignRole(actorRole, in.Role) {
+		c.JSON(403, gin.H{"error": "cannot invite equal or higher role"})
+		return
 	}
 	token := randString(32)
 	_, err := s.db.Exec(c, "insert into workspace_invites(workspace_id,email,role,token,created_by,expires_at) values($1,$2,$3,$4,$5,now()+interval '7 days')", wid, strings.ToLower(in.Email), in.Role, token, userID(c))
@@ -383,15 +456,27 @@ func (s *Server) getInvite(c *gin.Context) {
 	c.JSON(200, gin.H{"email": email, "role": role, "workspaceId": wid, "workspaceName": wname})
 }
 func (s *Server) acceptInvite(c *gin.Context) {
-	tx, _ := s.db.Begin(c)
+	tx, err := s.db.Begin(c)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
 	defer tx.Rollback(c)
-	var wid, role string
-	err := tx.QueryRow(c, "select workspace_id,role from workspace_invites where token=$1 and accepted_at is null and expires_at>now() for update", c.Param("token")).Scan(&wid, &role)
+	var wid, role, inviteEmail, userEmail string
+	err = tx.QueryRow(c, "select workspace_id,role,email::text from workspace_invites where token=$1 and accepted_at is null and expires_at>now() for update", c.Param("token")).Scan(&wid, &role, &inviteEmail)
 	if err != nil {
 		fail(c, 404, err)
 		return
 	}
-	_, err = tx.Exec(c, "insert into workspace_members(workspace_id,user_id,role) values($1,$2,$3) on conflict do nothing", wid, userID(c), role)
+	if err = tx.QueryRow(c, "select email::text from users where id=$1", userID(c)).Scan(&userEmail); err != nil {
+		fail(c, 401, err)
+		return
+	}
+	if !strings.EqualFold(inviteEmail, userEmail) {
+		c.JSON(403, gin.H{"error": "invite email does not match authenticated user"})
+		return
+	}
+	tag, err := tx.Exec(c, "insert into workspace_members(workspace_id,user_id,role) values($1,$2,$3) on conflict do nothing", wid, userID(c), role)
 	if err == nil {
 		_, err = tx.Exec(c, "update workspace_invites set accepted_at=now() where token=$1", c.Param("token"))
 	}
@@ -399,9 +484,15 @@ func (s *Server) acceptInvite(c *gin.Context) {
 		fail(c, 400, err)
 		return
 	}
-	tx.Commit(c)
-	s.activity(c, wid, nil, "member.joined", gin.H{"userId": userID(c)})
-	c.JSON(200, gin.H{"workspaceId": wid})
+	if err = tx.Commit(c); err != nil {
+		fail(c, 500, err)
+		return
+	}
+	joined := tag.RowsAffected() == 1
+	if joined {
+		s.activity(c, wid, nil, "member.joined", gin.H{"userId": userID(c)})
+	}
+	c.JSON(200, gin.H{"workspaceId": wid, "joined": joined})
 }
 
 func (s *Server) listProjects(c *gin.Context) {
@@ -474,7 +565,7 @@ func (s *Server) getBoard(c *gin.Context) {
 	if !s.canProject(c, pid, "Viewer") {
 		return
 	}
-	rows, err := s.db.Query(c, `select c.id,c.name,c.position,coalesce(json_agg(json_build_object('id',t.id,'title',t.title,'description',t.description,'priority',t.priority,'assigneeId',t.assignee_id,'dueDate',t.due_date,'labels',t.labels,'position',t.position) order by t.position) filter (where t.id is not null),'[]') from project_columns c left join tasks t on t.column_id=c.id where c.project_id=$1 group by c.id order by c.position`, pid)
+	rows, err := s.db.Query(c, `select c.id,c.name,c.position,coalesce(json_agg(json_build_object('id',t.id,'title',t.title,'description',t.description,'priority',t.priority,'assigneeId',t.assignee_id,'dueDate',t.due_date,'labels',t.labels,'position',t.position) order by t.position) filter (where t.id is not null),'[]') from project_columns c left join tasks t on t.column_id=c.id and t.project_id=c.project_id where c.project_id=$1 group by c.id order by c.position`, pid)
 	if err != nil {
 		fail(c, 500, err)
 		return
@@ -508,13 +599,44 @@ func (s *Server) createTask(c *gin.Context) {
 	if in.Priority == "" {
 		in.Priority = "Medium"
 	}
+	tx, err := s.db.Begin(c)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
+	defer tx.Rollback(c)
 	if in.ColumnID == "" {
-		_ = s.db.QueryRow(c, "select id from project_columns where project_id=$1 order by position limit 1", pid).Scan(&in.ColumnID)
+		err = tx.QueryRow(c, "select id from project_columns where project_id=$1 order by position limit 1", pid).Scan(&in.ColumnID)
+	} else {
+		err = tx.QueryRow(c, "select id from project_columns where id=$1 and project_id=$2", in.ColumnID, pid).Scan(&in.ColumnID)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		c.JSON(400, gin.H{"error": "invalid column for project"})
+		return
+	}
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
+	if in.AssigneeID != "" {
+		var assigneeID string
+		if err = tx.QueryRow(c, "select wm.user_id::text from projects p join workspace_members wm on wm.workspace_id=p.workspace_id where p.id=$1 and wm.user_id=$2 for key share of wm", pid, in.AssigneeID).Scan(&assigneeID); errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(400, gin.H{"error": "assignee is not a workspace member"})
+			return
+		}
+		if err != nil {
+			fail(c, 500, err)
+			return
+		}
 	}
 	var id string
-	err := s.db.QueryRow(c, "insert into tasks(project_id,column_id,title,description,priority,assignee_id,due_date,labels,created_by,position) values($1,$2,$3,$4,$5,nullif($6,'')::uuid,$7,$8,$9,coalesce((select max(position)+1 from tasks where column_id=$2),0)) returning id", pid, in.ColumnID, in.Title, in.Description, in.Priority, in.AssigneeID, in.DueDate, in.Labels, userID(c)).Scan(&id)
+	err = tx.QueryRow(c, "insert into tasks(project_id,column_id,title,description,priority,assignee_id,due_date,labels,created_by,position) values($1,$2,$3,$4,$5,nullif($6,'')::uuid,$7,$8,$9,coalesce((select max(position)+1 from tasks where column_id=$2),0)) returning id", pid, in.ColumnID, in.Title, in.Description, in.Priority, in.AssigneeID, in.DueDate, in.Labels, userID(c)).Scan(&id)
 	if err != nil {
-		fail(c, 400, err)
+		fail(c, 500, err)
+		return
+	}
+	if err = tx.Commit(c); err != nil {
+		fail(c, 500, err)
 		return
 	}
 	if in.AssigneeID != "" {
@@ -524,6 +646,9 @@ func (s *Server) createTask(c *gin.Context) {
 	c.JSON(201, gin.H{"id": id})
 }
 func (s *Server) getTask(c *gin.Context) {
+	if !s.canTask(c, c.Param("id"), "Viewer") {
+		return
+	}
 	rows, err := s.db.Query(c, "select t.id,t.title,t.description,t.priority,t.assignee_id,t.due_date,t.labels,t.created_at,t.updated_at,c.name as status from tasks t join project_columns c on c.id=t.column_id where t.id=$1", c.Param("id"))
 	scanRows(c, rows, err)
 }
@@ -536,6 +661,7 @@ func (s *Server) updateTask(c *gin.Context) {
 	if !s.canTask(c, c.Param("id"), "Member") {
 		return
 	}
+	pid := s.projectIDForTask(c, c.Param("id"))
 	var due *time.Time
 	clearDue := false
 	if raw, ok := in["dueDate"]; ok {
@@ -557,12 +683,36 @@ func (s *Server) updateTask(c *gin.Context) {
 	} else if due != nil {
 		dueArg = *due
 	}
-	_, err := s.db.Exec(c, "update tasks set title=coalesce($2,title), description=coalesce($3,description), priority=coalesce($4,priority), assignee_id=coalesce(nullif($5,'')::uuid,assignee_id), labels=coalesce($6,labels), due_date=case when $7 then null when $8::timestamptz is not null then $8 else due_date end, updated_at=now() where id=$1", c.Param("id"), strp(in, "title"), strp(in, "description"), strp(in, "priority"), strp(in, "assigneeId"), stringSlice(in["labels"]), clearDue, dueArg)
+	tx, err := s.db.Begin(c)
 	if err != nil {
-		fail(c, 400, err)
+		fail(c, 500, err)
 		return
 	}
-	pid := s.projectIDForTask(c, c.Param("id"))
+	defer tx.Rollback(c)
+	if assignee := strp(in, "assigneeId"); assignee != nil && *assignee != "" {
+		var assigneeID string
+		if err = tx.QueryRow(c, "select wm.user_id::text from projects p join workspace_members wm on wm.workspace_id=p.workspace_id where p.id=$1 and wm.user_id=$2 for key share of wm", pid, *assignee).Scan(&assigneeID); errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(400, gin.H{"error": "assignee is not a workspace member"})
+			return
+		}
+		if err != nil {
+			fail(c, 500, err)
+			return
+		}
+	}
+	tag, err := tx.Exec(c, "update tasks set title=coalesce($2,title), description=coalesce($3,description), priority=coalesce($4,priority), assignee_id=coalesce(nullif($5,'')::uuid,assignee_id), labels=coalesce($6,labels), due_date=case when $7 then null when $8::timestamptz is not null then $8 else due_date end, updated_at=now() where id=$1", c.Param("id"), strp(in, "title"), strp(in, "description"), strp(in, "priority"), strp(in, "assigneeId"), stringSlice(in["labels"]), clearDue, dueArg)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		c.JSON(404, gin.H{"error": "task not found"})
+		return
+	}
+	if err = tx.Commit(c); err != nil {
+		fail(c, 500, err)
+		return
+	}
 	if assignee := strp(in, "assigneeId"); assignee != nil && *assignee != "" {
 		s.notifyRef(c, *assignee, "task.assigned", "Task assigned", "A task was assigned to you", "task", c.Param("id"))
 	}
@@ -1345,14 +1495,58 @@ func (s *Server) issueTokens(ctx context.Context, uid string) (gin.H, error) {
 	_, err := s.db.Exec(ctx, "insert into sessions(user_id,refresh_token_hash,expires_at) values($1,$2,now()+interval '30 days')", uid, hashToken(rt))
 	return gin.H{"accessToken": at, "refreshToken": rt}, err
 }
-func (s *Server) can(c *gin.Context, wid, need string) bool {
+func (s *Server) issueTokensTx(ctx context.Context, tx pgx.Tx, uid string) (gin.H, error) {
+	access := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{uid, jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)), IssuedAt: jwt.NewNumericDate(time.Now())}})
+	at, _ := access.SignedString([]byte(s.cfg.JWTSecret))
+	rt := randString(48)
+	_, err := tx.Exec(ctx, "insert into sessions(user_id,refresh_token_hash,expires_at) values($1,$2,now()+interval '30 days')", uid, hashToken(rt))
+	return gin.H{"accessToken": at, "refreshToken": rt}, err
+}
+func (s *Server) role(c *gin.Context, wid, need string) (string, bool) {
 	var role string
 	err := s.db.QueryRow(c, "select role from workspace_members where workspace_id=$1 and user_id=$2", wid, userID(c)).Scan(&role)
 	if err != nil || rank(role) < rank(need) {
 		c.AbortWithStatusJSON(403, gin.H{"error": "forbidden"})
-		return false
+		return "", false
 	}
-	return true
+	return role, true
+}
+
+func (s *Server) lockMemberPair(c *gin.Context, tx pgx.Tx, wid, actorID, targetID, need string) (string, string, bool) {
+	rows, err := tx.Query(c, "select user_id::text,role from workspace_members where workspace_id=$1 and user_id in ($2,$3) order by user_id for update", wid, actorID, targetID)
+	if err != nil {
+		fail(c, 500, err)
+		return "", "", false
+	}
+	defer rows.Close()
+	roles := map[string]string{}
+	for rows.Next() {
+		var uid, role string
+		if err := rows.Scan(&uid, &role); err != nil {
+			fail(c, 500, err)
+			return "", "", false
+		}
+		roles[uid] = role
+	}
+	if err := rows.Err(); err != nil {
+		fail(c, 500, err)
+		return "", "", false
+	}
+	actorRole := roles[actorID]
+	if rank(actorRole) < rank(need) {
+		c.AbortWithStatusJSON(403, gin.H{"error": "forbidden"})
+		return "", "", false
+	}
+	targetRole := roles[targetID]
+	if targetRole == "" {
+		c.JSON(404, gin.H{"error": "member not found"})
+		return "", "", false
+	}
+	return actorRole, targetRole, true
+}
+func (s *Server) can(c *gin.Context, wid, need string) bool {
+	_, ok := s.role(c, wid, need)
+	return ok
 }
 func (s *Server) canProject(c *gin.Context, pid, need string) bool {
 	var wid string
@@ -1364,7 +1558,7 @@ func (s *Server) canProject(c *gin.Context, pid, need string) bool {
 }
 func (s *Server) canTask(c *gin.Context, tid, need string) bool {
 	var wid string
-	err := s.db.QueryRow(c, "select p.workspace_id from tasks t join projects p on p.id=t.project_id where t.id=$1", tid).Scan(&wid)
+	err := s.db.QueryRow(c, "select p.workspace_id from tasks t join projects p on p.id=t.project_id join project_columns pc on pc.id=t.column_id and pc.project_id=t.project_id where t.id=$1", tid).Scan(&wid)
 	if err != nil {
 		c.AbortWithStatusJSON(404, gin.H{"error": "not found"})
 		return false

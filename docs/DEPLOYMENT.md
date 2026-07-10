@@ -21,7 +21,7 @@
 - **EC2** runs all services via Docker Compose.
 - **Nginx** terminates TLS (optional), routes `/` to frontend and `/api/*` to backend.
 - **PostgreSQL** stores all application data.
-- **Redis** handles pub/sub for SSE events and session management.
+- **Redis** handles pub/sub for SSE events. Sessions are stored in PostgreSQL.
 - **Worker** processes email jobs on a polling loop.
 - **S3** stores file attachments (presigned URLs).
 
@@ -75,8 +75,10 @@ cp .env.example .env
 | Variable            | Description                                        | Default                   |
 |---------------------|----------------------------------------------------|---------------------------|
 | `S3_ENDPOINT`       | Custom S3 endpoint (for S3-compatible storage)     | (empty = standard AWS S3) |
-| `RESEND_API_KEY`    | Resend API key for transactional email             | (email sending disabled)  |
+| `RESEND_API_KEY`    | Reserved for future transactional email support; current worker logs queued email jobs | (unused) |
 | `FROM_EMAIL`        | Sender email address                               | `SynergyFlow <noreply@example.com>` |
+| `EVENTLOG_ROOT`     | Durable SSE event-log directory inside backend container | `/var/lib/synergyflow/eventlog` |
+| `EVENTLOG_FSYNC`    | Force fsync after event-log appends                | `false`                   |
 
 ## First Deploy
 
@@ -143,7 +145,7 @@ The GitHub Actions workflow (`.github/workflows/deploy.yml`) handles this automa
 1. Push to `main` on GitHub.
 2. GitHub Actions runs checks (go vet, go test, go build, npm ci, npm build, docker compose config).
 3. If checks pass, SSH into EC2.
-4. EC2 pulls latest code, rebuilds containers, restarts stack.
+4. If `EC2_HOST`, `EC2_USER`, and `EC2_SSH_KEY` secrets are all set, EC2 pulls latest code, rebuilds containers, and restarts the stack. If any are missing, the deploy job fails before SSH.
 
 ### Manual redeploy
 
@@ -209,6 +211,7 @@ The demo account `demo@synergyflow.dev` / `password123` will be available again.
 - Check the browser's Network tab: the SSE connection to `/api/projects/<id>/events` should stay open.
 - Nginx `proxy_buffering off` and `proxy_read_timeout 1h` must be present.
 - Check Redis pub/sub is working: events are published to `project:<id>` channels.
+- Durable reconnect replay reads backend event-log records after `Last-Event-ID` or the `?after=` query value. In production this path is persisted by the `eventlog` Docker volume at `/var/lib/synergyflow/eventlog`.
 - The `middleware.TimeoutMiddleware` in `app.go` must NOT wrap the SSE route.
 
 ### S3 upload failing
