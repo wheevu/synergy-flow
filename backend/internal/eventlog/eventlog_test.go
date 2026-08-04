@@ -87,3 +87,30 @@ func TestRejectsUnsafeProjectID(t *testing.T) {
 		t.Fatal("expected unsafe project id error")
 	}
 }
+
+func TestLastIDReturnsDurableProjectWatermark(t *testing.T) {
+	root := t.TempDir()
+	l, err := Open(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := l.LastID("project-watermark"); err != nil || got != 0 {
+		t.Fatalf("initial watermark = %d, err=%v", got, err)
+	}
+	if _, err := l.Append("project-watermark", []byte(`{"type":"task.created"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.Append("project-watermark", []byte(`{"type":"task.updated"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := l.LastID("project-watermark"); err != nil || got != 2 {
+		t.Fatalf("watermark = %d, err=%v", got, err)
+	}
+	reopened, err := Open(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := reopened.LastID("project-watermark"); err != nil || got != 2 {
+		t.Fatalf("recovered watermark = %d, err=%v", got, err)
+	}
+}

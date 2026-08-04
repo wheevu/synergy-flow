@@ -325,6 +325,8 @@ Walk through the full app in 5 minutes: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.m
 
 ## Known limitations
 
+- Scenario board snapshots are captured in a PostgreSQL `REPEATABLE READ` transaction and validated before their immutable digest is stored. Dependency foreign keys require both task endpoints to belong to that same project.
+- Scenario `base_event_id` is retained as an advisory filesystem event-log watermark. It is not transactionally coupled to the PostgreSQL snapshot, so the API exposes it as `baseEventWatermark` with `baseEventWatermarkSemantics: "advisory"` and `baseEventWatermarkReproducible: false`; callers must use `baseDigest` to identify the captured snapshot and must not use the watermark to reconstruct it.
 - Email jobs are queued and logged by the worker; external email delivery is not implemented yet (invite links still work in UI/API responses)
 - File attachments require S3-compatible storage (MinIO included for dev)
 - SSE requires Nginx with `proxy_buffering off` (already configured)

@@ -92,6 +92,21 @@ func (l *Log) Append(projectID string, payload []byte) (uint64, error) {
 	return id, nil
 }
 
+// LastID returns the durable event watermark for a project. Scenario creation
+// uses this value as a reproducibility marker; it never appends to the log.
+func (l *Log) LastID(projectID string) (uint64, error) {
+	pl, err := l.openProject(projectID)
+	if err != nil {
+		return 0, err
+	}
+	pl.mu.Lock()
+	defer pl.mu.Unlock()
+	if pl.nextID == 0 {
+		return 0, nil
+	}
+	return pl.nextID - 1, nil
+}
+
 func (l *Log) ReadAfter(projectID string, after uint64, limit int) ([]Record, error) {
 	if limit <= 0 {
 		return nil, nil
