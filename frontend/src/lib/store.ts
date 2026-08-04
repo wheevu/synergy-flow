@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 type Tokens={accessToken:string;refreshToken:string};type AuthState={accessToken:string|null;refreshToken:string|null;user:any|null;setTokens:(t:Tokens)=>void;setUser:(u:any)=>void;logout:()=>void};
-const saved=JSON.parse(localStorage.getItem('sf-auth')||'{}');
+let saved: { accessToken?: string; refreshToken?: string; user?: any } = {};
+try { saved = JSON.parse(localStorage.getItem('sf-auth') || '{}'); } catch { saved = {}; }
 export const useAuthStore=create<AuthState>((set)=>({accessToken:saved.accessToken||null,refreshToken:saved.refreshToken||null,user:saved.user||null,setTokens:(t)=>set((s)=>{const n={...s,...t};localStorage.setItem('sf-auth',JSON.stringify({accessToken:t.accessToken,refreshToken:t.refreshToken,user:s.user}));return n}),setUser:(user)=>set((s)=>{localStorage.setItem('sf-auth',JSON.stringify({...s,user}));return{user}}),logout:()=>{localStorage.removeItem('sf-auth');set({accessToken:null,refreshToken:null,user:null})}}));
 export type Toast={id:string;title:string;body?:string;tone?:'success'|'error'|'info';exiting?:boolean};
 type UIState={taskId:string|null;draftTaskId:string|null;commandOpen:boolean;settingsOpen:boolean;aiPanelOpen:boolean;toasts:Toast[];openTask:(id:string,draft?:boolean)=>void;closeTask:()=>void;clearDraftTask:()=>void;setCommandOpen:(open:boolean)=>void;setSettingsOpen:(open:boolean)=>void;setAIPanelOpen:(open:boolean)=>void;toast:(toast:Omit<Toast,'id'>)=>void;dismissToast:(id:string)=>void};

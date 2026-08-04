@@ -500,10 +500,11 @@ function Board({ projectId, project, workspace, insightTab, railOpen, setInsight
     }
   };
 
+  const accessToken = useAuthStore(s => s.accessToken);
+
   useEffect(() => {
     if (projectId.length < 8) return;
-    const token = useAuthStore.getState().accessToken;
-    const es = new EventSource(`${API_URL}/projects/${projectId}/events?token=${encodeURIComponent(token || '')}`, { withCredentials: false });
+    const es = new EventSource(`${API_URL}/projects/${projectId}/events?token=${encodeURIComponent(accessToken || '')}`, { withCredentials: false });
     es.onopen = () => setStreamState('live');
     es.onerror = () => setStreamState('reconnecting');
     // SSE event payload is intentionally ignored: any valid event triggers a board cache
@@ -519,7 +520,7 @@ function Board({ projectId, project, workspace, insightTab, railOpen, setInsight
       qclient.invalidateQueries({ queryKey });
     };
     return () => es.close();
-  }, [projectId, qclient]);
+  }, [projectId, qclient, accessToken]);
 
   const move = useMutation({
     mutationFn: async (v: MoveInput) => api.post(`/tasks/${v.taskId}/move`, v),

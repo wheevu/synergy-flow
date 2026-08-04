@@ -206,7 +206,11 @@ func (s *Server) register(c *gin.Context) {
 		fail(c, 409, err)
 		return
 	}
-	toks, _ := s.issueTokens(c, u.ID)
+	toks, err := s.issueTokens(c, u.ID)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
 	c.JSON(201, gin.H{"user": u, "tokens": toks})
 }
 func (s *Server) login(c *gin.Context) {
@@ -220,7 +224,11 @@ func (s *Server) login(c *gin.Context) {
 		c.JSON(401, gin.H{"error": "invalid credentials"})
 		return
 	}
-	toks, _ := s.issueTokens(c, id)
+	toks, err := s.issueTokens(c, id)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
 	c.JSON(200, gin.H{"user": User{id, name, email}, "tokens": toks})
 }
 func (s *Server) refresh(c *gin.Context) {
@@ -295,7 +303,10 @@ func (s *Server) createWorkspace(c *gin.Context) {
 		fail(c, 400, err)
 		return
 	}
-	tx.Commit(c)
+	if err = tx.Commit(c); err != nil {
+		fail(c, 500, err)
+		return
+	}
 	c.JSON(201, gin.H{"id": id, "name": in.Name, "slug": slug, "role": "Owner"})
 }
 func (s *Server) getWorkspace(c *gin.Context) {
@@ -517,10 +528,14 @@ func (s *Server) createProject(c *gin.Context) {
 	if bind(c, &in) {
 		return
 	}
-	tx, _ := s.db.Begin(c)
+	tx, err := s.db.Begin(c)
+	if err != nil {
+		fail(c, 500, err)
+		return
+	}
 	defer tx.Rollback(c)
 	var pid string
-	err := tx.QueryRow(c, "insert into projects(workspace_id,name,description,created_by) values($1,$2,$3,$4) returning id", wid, in.Name, in.Description, userID(c)).Scan(&pid)
+	err = tx.QueryRow(c, "insert into projects(workspace_id,name,description,created_by) values($1,$2,$3,$4) returning id", wid, in.Name, in.Description, userID(c)).Scan(&pid)
 	cols := []string{"Backlog", "Todo", "In Progress", "In Review", "Done"}
 	for i, n := range cols {
 		if err == nil {
@@ -531,7 +546,10 @@ func (s *Server) createProject(c *gin.Context) {
 		fail(c, 400, err)
 		return
 	}
-	tx.Commit(c)
+	if err = tx.Commit(c); err != nil {
+		fail(c, 500, err)
+		return
+	}
 	c.JSON(201, gin.H{"id": pid, "name": in.Name, "description": in.Description})
 }
 func (s *Server) updateProject(c *gin.Context) {
@@ -582,10 +600,20 @@ func (s *Server) getBoard(c *gin.Context) {
 		var id, n string
 		var pos int
 		var tasks []byte
-		rows.Scan(&id, &n, &pos, &tasks)
+		if err := rows.Scan(&id, &n, &pos, &tasks); err != nil {
+			fail(c, 500, err)
+			return
+		}
 		var arr any
-		json.Unmarshal(tasks, &arr)
+		if err := json.Unmarshal(tasks, &arr); err != nil {
+			fail(c, 500, err)
+			return
+		}
 		out = append(out, gin.H{"id": id, "name": n, "position": pos, "tasks": arr})
+	}
+	if err := rows.Err(); err != nil {
+		fail(c, 500, err)
+		return
 	}
 	c.JSON(200, gin.H{"columns": out})
 }
@@ -706,7 +734,11 @@ func (s *Server) updateTask(c *gin.Context) {
 			return
 		}
 	}
-	tag, err := tx.Exec(c, "update tasks set title=coalesce($2,title), description=coalesce($3,description), priority=coalesce($4,priority), assignee_id=coalesce(nullif($5,'')::uuid,assignee_id), labels=coalesce($6,labels), due_date=case when $7 then null when $8::timestamptz is not null then $8 else due_date end, updated_at=now() where id=$1", c.Param("id"), strp(in, "title"), strp(in, "description"), strp(in, "priority"), strp(in, "assigneeId"), stringSlice(in["labels"]), clearDue, dueArg)
+	assigneeSet := false
+	if _, ok := in["assigneeId"]; ok {
+		assigneeSet = true
+	}
+	tag, err := tx.Exec(c, "update tasks set title=coalesce($2,title), description=coalesce($3,description), priority=coalesce($4,priority), assignee_id=case when $9 and ($5 is null or $5='') then null else coalesce(nullif($5,'')::uuid,assignee_id) end, labels=coalesce($6,labels), due_date=case when $7 then null when $8::timestamptz is not null then $8 else due_date end, updated_at=now() where id=$1", c.Param("id"), strp(in, "title"), strp(in, "description"), strp(in, "priority"), strp(in, "assigneeId"), stringSlice(in["labels"]), clearDue, dueArg, assigneeSet)
 	if err != nil {
 		fail(c, 500, err)
 		return
@@ -732,7 +764,10 @@ func (s *Server) deleteTask(c *gin.Context) {
 	pid := s.projectIDForTask(c, c.Param("id"))
 	var col string
 	var pos int
-	_ = s.db.QueryRow(c, "select column_id,position from tasks where id=$1", c.Param("id")).Scan(&col, &pos)
+	if err := s.db.QueryRow(c, "select column_id,position from tasks where id=$1", c.Param("id")).Scan(&col, &pos); err != nil {
+		fail(c, 404, err)
+		return
+	}
 	_, err := s.db.Exec(c, "delete from tasks where id=$1", c.Param("id"))
 	if err != nil {
 		fail(c, 400, err)
