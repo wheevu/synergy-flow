@@ -8,7 +8,7 @@
                          │  (Docker host)   │
                          │                  │
   Internet ──► Nginx ──┼──► frontend:80  │
-     :80/443   │     │──► backend:8080  │
+        :80    │     │──► backend:8080  │
                │     │──► SSE (stream)  │
                │     │                  │
                │     ├── postgres:5432  │
@@ -19,7 +19,8 @@
 ```
 
 - **EC2** runs all services via Docker Compose.
-- **Nginx** terminates TLS (optional), routes `/` to frontend and `/api/*` to backend.
+- **Nginx** serves HTTP on port 80 and routes `/` to frontend and `/api/*` to backend.
+- **TLS** is not configured in the supplied production Compose/config; add a TLS listener or terminate TLS upstream before using HTTPS.
 - **PostgreSQL** stores all application data.
 - **Redis** handles pub/sub for SSE events. Sessions are stored in PostgreSQL.
 - **Worker** processes email jobs on a polling loop.
@@ -80,6 +81,12 @@ cp .env.example .env
 | `EVENTLOG_ROOT`     | Durable SSE event-log directory inside backend container | `/var/lib/synergyflow/eventlog` |
 | `EVENTLOG_FSYNC`    | Force fsync after event-log appends                | `false`                   |
 
+The production Compose file sets `EVENTLOG_ROOT` to `/var/lib/synergyflow/eventlog` and persists it in the `eventlog` volume.
+The bundled PostgreSQL service uses `sslmode=disable` in the example connection string.
+For an external PostgreSQL service that requires TLS, use `sslmode=require`.
+`VITE_API_URL` is read during the frontend image build, not from the running production container.
+The supplied production image uses same-origin `/api` routing unless the frontend image build is changed to inject a separate API URL.
+
 ## First Deploy
 
 ### 1. Launch EC2 instance
@@ -133,10 +140,10 @@ curl -s http://localhost/ready
 
 Point `synergyflow.example.com` to the EC2 Elastic IP.
 
-### 7. (Optional) Configure TLS
+### 7. Configure TLS separately (optional)
 
-Use Let's Encrypt / Certbot to get certificates, then uncomment the HTTPS redirect
-block in `infra/nginx/default.conf` and add the certificate paths.
+The supplied Nginx config has no TLS listener or certificate mounts.
+Terminate TLS upstream, or add a complete HTTPS server block and certificates to `infra/nginx/default.conf` before exposing HTTPS.
 
 ## Redeploy Flow
 
@@ -217,7 +224,7 @@ The demo account `demo@synergyflow.dev` / `password123` will be available again.
 ### S3 upload failing
 
 - Verify AWS credentials in `.env` have `s3:PutObject` permission.
-- Check `S3_BUCKET` and `S3_REGION` match the actual bucket.
+- Check `S3_BUCKET` and `AWS_REGION` match the actual bucket.
 - The S3 endpoint defaults to standard AWS S3 when `S3_ENDPOINT` is empty.
 - For custom S3-compatible storage, set `S3_ENDPOINT` to the service URL.
 

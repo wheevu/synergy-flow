@@ -46,16 +46,13 @@ frontend/
 ├── src/
 │   ├── main.tsx             # App entrypoint and all components
 │   ├── styles.css           # Tailwind + custom CSS
-│   ├── types/index.ts       # Shared TypeScript domain types
 │   ├── api/client.ts        # Axios client with JWT refresh interceptor
-│   ├── lib/
-│   │   ├── store.ts         # Zustand auth + UI state stores
-│   │   └── helpers.ts       # Pure utility functions
-│   └── components/
-│       └── shared.tsx       # Shared UI components (charts, layouts)
+│   └── lib/store.ts         # Zustand auth + UI state stores
 ├── Dockerfile
 └── nginx.conf
 ```
+
+Route registration lives in [`backend/internal/app/app.go`](../backend/internal/app/app.go).
 
 ## Backend Architecture
 
@@ -67,7 +64,7 @@ frontend/
   - Structured request logging
   - Panic recovery
   - Request body size limiting (12 MB)
-  - Context timeout (30 seconds)
+  - Context timeout (30 seconds for non-SSE API routes)
   - CORS (configured via `FRONTEND_URL`)
 
 ### Authentication
@@ -96,7 +93,7 @@ the user's workspace role and comparing against the required minimum rank.
 ### Real-time Events (SSE)
 
 1. Backend actions publish events to Redis channels (`project:{projectId}`)
-2. Clients connect to `GET /projects/:id/events` with an SSE stream
+2. Clients connect to `GET /api/projects/:id/events` with an SSE stream
 3. Redis subscription forwards events to all connected clients
 4. Ping events every 25 seconds keep the connection alive
 5. Nginx is configured with `proxy_buffering off` for SSE compatibility

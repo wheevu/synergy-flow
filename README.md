@@ -171,7 +171,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture guide
 
 ## API overview
 
-See the full route map in `app.go`.
+See the full route map in [`backend/internal/app/app.go`](backend/internal/app/app.go).
 
 ### Authentication
 
@@ -218,12 +218,18 @@ See the full route map in `app.go`.
 | GET | `/api/notifications` | User notifications |
 | POST | `/api/notifications/read` | Mark all as read |
 
+### Scenario planning
+
+Scenario planning is available through the backend API only.
+The frontend does not currently expose a scenario-planning screen.
+Routes include `/api/projects/:id/scenarios`, `/api/scenarios/:id`, `/api/scenarios/:id/events`, `/api/scenarios/:id/analysis`, and `/api/scenarios/:id/compare`.
+
 ---
 
 ## Real-time architecture (SSE)
 
 1. Backend actions publish events to Redis channels (`project:{projectId}`)
-2. Clients connect to `GET /projects/:id/events` — returns an SSE stream
+2. Clients connect to `GET /api/projects/:id/events` and receive an SSE stream
 3. Redis subscription forwards events to all connected clients
 4. Ping events every 25 seconds prevent proxy timeouts
 5. Nginx is configured with `proxy_buffering off` for streaming
@@ -317,7 +323,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 | `FRONTEND_URL` | Public frontend URL (CORS + invite links) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 storage credentials |
 | `S3_BUCKET` | S3 bucket for file attachments |
-| `EVENTLOG_ROOT` | Durable SSE event-log path (prod compose persists `/var/lib/synergyflow/eventlog`) |
+
+The production Compose file sets `EVENTLOG_ROOT` to `/var/lib/synergyflow/eventlog` and persists it in the `eventlog` volume, so it does not need to be set in `.env` for the supplied production stack.
 
 ### Demo script
 
@@ -340,16 +347,16 @@ Walk through the full app in 5 minutes: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.m
 
 ```bash
 # Backend unit tests
-cd backend && go test ./...
+(cd backend && go test ./...)
 
 # Backend build
-cd backend && go build ./cmd/server ./cmd/worker
+(cd backend && go build ./cmd/server ./cmd/worker)
 
 # Frontend type check
-cd frontend && npm run lint
+(cd frontend && npm run lint)
 
 # Frontend build
-cd frontend && npm run build
+(cd frontend && npm run build)
 
 # Docker Compose validation
 docker compose config
